@@ -88,6 +88,17 @@ std::string thread::make_thread_fe(sqlite3* db, row& r)
     return acc;
 }
 
+struct thread_comp
+{
+    bool operator()(const row &l, const row &r)
+    {
+        size_t nchars;
+        int left = std::stoi(l.at("lastpost"), &nchars);
+        int right = std::stoi(r.at("lastpost"), &nchars);
+        return left > right; 
+    }
+};
+
 std::string board::make_threadlist_fe(sqlite3* db)
 {
     std::string acc;
@@ -100,6 +111,7 @@ std::string board::make_threadlist_fe(sqlite3* db)
     );
 
     sqlite3_exec(db, query.c_str(), sqlcb, &threads, &sql_err);
+    std::sort(threads.begin(), threads.end(), thread_comp());
     for (auto iter = threads.begin(); iter != threads.end(); iter++)
     {
         acc.append(
@@ -111,17 +123,6 @@ std::string board::make_threadlist_fe(sqlite3* db)
     }
     return acc;
 }
-
-struct thread_comp
-{
-    bool operator()(const row &l, const row &r)
-    {
-        size_t nchars;
-        int left = std::stoi(l.at("lastpost"), &nchars);
-        int right = std::stoi(r.at("lastpost"), &nchars);
-        return left > right; 
-    }
-};
 
 std::string board::make_board_fe(sqlite3* db)
 {
