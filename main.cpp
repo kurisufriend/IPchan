@@ -87,7 +87,6 @@ int main(int argc, char* argv[])
     if (!inited)
     {
         db_schema_init(db);
-        std::cout << "sdlkowadkewokfokewf" << std::endl;
     }
     
     mg_http_listen(&mongoose, "0.0.0.0:1337", callback, &mongoose);

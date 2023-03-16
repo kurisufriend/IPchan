@@ -5,52 +5,39 @@
 #include <string>
 #include <algorithm>
 #include "lib/mongoose/mongoose.h"
-
-const char* make_posts = "create table posts("
-"tid INTEGER,"
-"bid INTEGER,"
-"no INTEGER,"
-"tim INTEGER,"
-"nam TEXT,"
-"bod TEXT"
-");";
-
-const char* make_threads = "create table threads("
-"bid INTEGER,"
-"tid INTEGER,"
-"subject TEXT,"
-"replies INTEGER,"
-"lastpost INTEGER"
-");";
-
-const char* make_boards = "create table boards("
-"ipid INTEGER,"
-"threadcount INTEGER"
-");";
-
-int sqlcb(void* a, int argc, char** argv, char** colname)
-{
-    rows* rs = (rows*) a;
-    row r;
-    int i;
-    for(i=0; i<argc; i++)
-    {
-        r.emplace(colname[i], argv[i] ? argv[i] : "NULL");
-        //printf("%s = %s\n", colname[i], argv[i] ? argv[i] : "NULL");
-    }
-    //printf("\n");
-    rs->push_back(r);
-    return 0;
-}
+#include "lib/sqleasy/sqleasy.h"
 
 char* sql_err;
+size_t stoi_nchars;
 
 void db_schema_init(sqlite3* db)
 {
     rows res;
-    std::cout << make_threads << make_posts << std::endl;
-    sqlite3_exec(db, make_threads, sqlcb, &res, &sql_err);
-    sqlite3_exec(db, make_posts, sqlcb, &res, &sql_err);
+
+    const char* make_posts = "create table posts("
+    "tid INTEGER,"
+    "bid INTEGER,"
+    "no INTEGER,"
+    "tim INTEGER,"
+    "nam TEXT,"
+    "bod TEXT"
+    ");";
+
+    const char* make_threads = "create table threads("
+    "bid INTEGER,"
+    "tid INTEGER,"
+    "subject TEXT,"
+    "replies INTEGER,"
+    "lastpost INTEGER"
+    ");";
+
+    const char* make_boards = "create table boards("
+    "ipid INTEGER,"
+    "threadcount INTEGER"
+    ");";
+
+    sqlite3_exec(db, make_threads, sqleasy_q::cb, &res, &sql_err);
+    sqlite3_exec(db, make_posts, sqleasy_q::cb, &res, &sql_err);
 }
 
 std::string thread::make_thread_fe(sqlite3* db, row& r)
@@ -59,13 +46,9 @@ std::string thread::make_thread_fe(sqlite3* db, row& r)
 
     rows posts;
 
-    std::string query = dumbfmt(
-        {
-        "select * from posts where bid=",r["bid"],
-        " and tid=",r["tid"],";"
-        }
-    );
-    sqlite3_exec(db, query.c_str(), sqlcb, &posts, &sql_err);
+    sqleasy_q{db, 
+        dumbfmt({"select * from posts where bid=",r["bid"]," and tid=",r["tid"],";"})
+    }.rexec(&posts);
 
     for (auto iter = posts.begin(); iter != posts.end(); iter++)
     {
@@ -73,8 +56,7 @@ std::string thread::make_thread_fe(sqlite3* db, row& r)
             acc.append("<details><summary>Unroll Thread...</summary>");
         else if (iter == posts.end() - 1 && posts.size() > 2)
             acc.append("</details>");
-        size_t nchars;
-        time_t ti = (time_t)stoi((*iter)["tim"], &nchars);
+        time_t ti = (time_t)stoi((*iter)["tim"], &stoi_nchars);
         acc.append(
             dumbfmt_file("./static/template/reply.html", {
                 {"no", (*iter)["no"]},
@@ -88,30 +70,22 @@ std::string thread::make_thread_fe(sqlite3* db, row& r)
     return acc;
 }
 
-struct thread_comp
+bool thread::comparator(const row &l, const row &r)
 {
-    bool operator()(const row &l, const row &r)
-    {
-        size_t nchars;
-        int left = std::stoi(l.at("lastpost"), &nchars);
-        int right = std::stoi(r.at("lastpost"), &nchars);
-        return left > right; 
-    }
-};
+    int left = std::stoi(l.at("lastpost"), &stoi_nchars);
+    int right = std::stoi(r.at("lastpost"), &stoi_nchars);
+    return left > right; 
+}
 
 std::string board::make_threadlist_fe(sqlite3* db)
 {
     std::string acc;
     rows threads;
 
-    std::string query = dumbfmt(
-        {
-        "select * from threads where bid=", std::to_string(this->ipid), ";"
-        }
-    );
-
-    sqlite3_exec(db, query.c_str(), sqlcb, &threads, &sql_err);
-    std::sort(threads.begin(), threads.end(), thread_comp());
+    sqleasy_q{db,
+        dumbfmt({"select * from threads where bid=",std::to_string(this->ipid), ";"})
+    }.rexec(&threads);
+    std::sort(threads.begin(), threads.end(), thread::comparator);
     for (auto iter = threads.begin(); iter != threads.end(); iter++)
     {
         acc.append(
@@ -129,15 +103,11 @@ std::string board::make_board_fe(sqlite3* db)
     std::string acc;
     rows threads;
 
-    std::string query = dumbfmt(
-        {
-        "select * from threads where bid=", std::to_string(this->ipid), ";"
-        }
-    );
-
-    sqlite3_exec(db, query.c_str(), sqlcb, &threads, &sql_err);
+    sqleasy_q{db,
+        dumbfmt({"select * from threads where bid=", std::to_string(this->ipid), ";"})
+    }.rexec(&threads);
     
-    std::sort(threads.begin(), threads.end(), thread_comp());
+    std::sort(threads.begin(), threads.end(), thread::comparator);
 
     for (auto iter = threads.begin(); iter != threads.end(); iter++)
     {
@@ -168,47 +138,37 @@ void thread::add_post(sqlite3* db, mg_str& querystring)
     time_t tim = time(0);
 
     rows threads;
-    std::string quer = dumbfmt(
-        {
-        "select * from threads where bid=", bid, " and tid=", tid, ";"
-        }
-    );
-    sqlite3_exec(db, quer.c_str(), sqlcb, &threads, &sql_err);
-    const char* replies = threads.at(0)["replies"].c_str();
-    size_t nchars;
-    int replycount = std::stoi(replies, &nchars) + 1;
-
-    quer = dumbfmt(
-        {
-        "update threads set replies=", std::to_string(replycount),
-        " where bid=", bid, " and tid=", tid, ";"
-        }
-    );
-    sqlite3_exec(db, quer.c_str(), sqlcb, &threads, &sql_err);
-
-    quer = dumbfmt(
-    {
-    "update threads set lastpost=", std::to_string(tim),
-    " where bid=", bid, " and tid=", tid, ";"
-    }
-    );
-    sqlite3_exec(db, quer.c_str(), sqlcb, &threads, &sql_err);
+    sqleasy_q{db,
+        dumbfmt({"select * from threads where bid=",bid," and tid=",tid,";"})
+    }.rexec(&threads);
     
+    
+    const char* replies = threads.at(0)["replies"].c_str();
+    int replycount = std::stoi(replies, &stoi_nchars) + 1;
+
+    sqleasy_q{db,
+        dumbfmt({"update threads set replies=",std::to_string(replycount)," where bid=",bid," and tid=",tid,";"})
+    }.rexec(&threads);
+
+    sqleasy_q{db,
+        dumbfmt({"update threads set lastpost=",std::to_string(tim)," where bid=",bid," and tid=",tid,";"})
+    }.rexec(&threads);
 
     buffetchhttpvar(postname);
     buffetchhttpvar(postbody);
-    std::string query = dumbfmt(
-        {
-        "insert into posts values(",
-        tid, ",",
-        bid, ",",
-        std::to_string(replycount), ",",
-        std::to_string(tim), ",\"",
-        postname, "\",\"",
-        postbody, "\");"
-        }
-    );
-    sqlite3_exec(db, query.c_str(), sqlcb, &res, &sql_err);
+    sqleasy_q{db,
+        dumbfmt(
+            {
+            "insert into posts values(",
+            tid, ",",
+            bid, ",",
+            std::to_string(replycount), ",",
+            std::to_string(tim), ",\"",
+            postname, "\",\"",
+            postbody, "\");"
+            }
+        )
+    }.rexec(&res);
 }
 
 void board::add_thread(sqlite3* db, mg_str& querystring)
@@ -220,39 +180,38 @@ void board::add_thread(sqlite3* db, mg_str& querystring)
     time_t tim = time(0);
 
     rows threads;
-    std::string quer = dumbfmt(
-        {
-        "select * from threads where bid=", bid, ";"
-        }
-    );
-    sqlite3_exec(db, quer.c_str(), sqlcb, &threads, &sql_err);
+    sqleasy_q{db,
+        dumbfmt({"select * from threads where bid=", bid, ";"})
+    }.rexec(&threads);
     int tid = threads.size();
 
     buffetchhttpvar(postname);
     buffetchhttpvar(postsub);
     buffetchhttpvar(postbody);
-    std::string query = dumbfmt(
-        {
-        "insert into threads values(",
-        bid, ",",
-        std::to_string(tid), ",\"",
-        postsub, "\",",
-        "1,",
-        std::to_string(tim), ");"
-        }
-    );
-    sqlite3_exec(db, query.c_str(), sqlcb, &res, &sql_err);
+    sqleasy_q{db, 
+        dumbfmt(
+            {
+            "insert into threads values(",
+            bid, ",",
+            std::to_string(tid), ",\"",
+            postsub, "\",",
+            "1,",
+            std::to_string(tim), ");"
+            }
+        )
+    }.rexec(&res);
 
-    query = dumbfmt(
-        {
-        "insert into posts values(",
-        std::to_string(tid), ",",
-        bid, ",",
-        "1", ",",
-        std::to_string(tim), ",\"",
-        postname, "\",\"",
-        postbody, "\");"
-        }
-    );
-    sqlite3_exec(db, query.c_str(), sqlcb, &res, &sql_err);
+    sqleasy_q{db, 
+        dumbfmt(
+            {
+            "insert into posts values(",
+            std::to_string(tid), ",",
+            bid, ",",
+            "1", ",",
+            std::to_string(tim), ",\"",
+            postname, "\",\"",
+            postbody, "\");"
+            }
+        )
+    }.rexec(&res);
 }
