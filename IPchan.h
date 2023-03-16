@@ -46,6 +46,7 @@ object_reference thread
 
     static std::string make_thread_fe(sqlite3* db, row& r);
     static void add_post(sqlite3* db, mg_str& querystring);
+    static bool comparator(const row &l, const row &r);
 };
 object_reference board
 {
