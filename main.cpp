@@ -1,6 +1,7 @@
 #include "lib/mongoose/mongoose.h"
 #include "lib/sqlite/sqlite3.h"
 #include "lib/dumbstr/dumbstr.h"
+#include "lib/json.hpp"
 #include "IPchan.h"
 
 #include <iostream>
@@ -8,6 +9,7 @@
 #include <any>
 #include <string>
 #include <vector>
+#include <fstream>
 
 #define XCLACKSOVERHEAD "X-Clacks-Overhead: GNU Terry Pratchett, GNU Aaron Swartz, GNU Hal Finney, GNU Norm Macdonald, GNU Gilbert Gottfried, GNU Aniki, GNU Terry Davis, GNU jstark, GNU John McAfee, GNU asshurtmacfags\n"
 
@@ -85,11 +87,15 @@ int main(int argc, char* argv[])
         return -1;
     }
     if (!inited)
-    {
         db_schema_init(db);
-    }
     
-    mg_http_listen(&mongoose, "0.0.0.0:1337", callback, &mongoose);
+    std::fstream f;
+    f.open("./config.json");
+    nlohmann::json cfg = nlohmann::json::parse(f);
+    f.close();
+
+
+    mg_http_listen(&mongoose, cfg["host"].get<std::string>().c_str(), callback, &mongoose);
     while (true) {mg_mgr_poll(&mongoose, 1000);}
     sqlite3_close(db);
 

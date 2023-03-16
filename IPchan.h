@@ -13,7 +13,7 @@
 
 #define str std::string
 
-typedef std::map<std::string, std::string/*std::pair<unsigned char, void*>*/> row;
+typedef std::map<std::string, std::string> row;
 typedef std::vector<row> rows;
 
 #define ip2ipid(ip) *((unsigned int*)ip)
@@ -23,9 +23,6 @@ struct ipv4
 {
     unsigned char adr[4];
 };
-
-int sqlcb(void* a, int argc, char** argv, char** colname);
-
 
 object_reference post
 {
