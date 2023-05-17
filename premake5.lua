@@ -10,7 +10,7 @@ project("IPchan")
     --buildoptions({""})
 
     --libdirs({"/usr/local/lib"})
-    links({"dl", "pthread"})
+    links({"dl", "pthread", "crypto"})
 
     files({
         "**.cpp",

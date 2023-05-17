@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from os import system
 from sys import argv
+from secrets import token_hex
+from json import loads, dumps
 
 flags = []
 if len(argv) <= 1:
@@ -14,6 +16,11 @@ if "m" in flags:
     #system("rm -r obj/*")
     system("rm ./bin/Debug/IPchan")
     system("make config=debug")
+    with open("./config.json", "r+") as f:
+        cfg = loads(f.read())
+        cfg["captcha_secret"] = token_hex(1024)
+        f.seek(0)
+        f.write(dumps(cfg, indent = 4))
 if "r" in flags:
     print("running~~~")
     system("./bin/Debug/IPchan ./sample")

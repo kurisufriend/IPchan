@@ -42,7 +42,7 @@ object_reference thread
     int lastpost;// we gotta have posts NOW like JUST NOW like A SECOND AGO go GO GO
 
     static std::string make_thread_fe(sqlite3* db, row& r);
-    static void add_post(sqlite3* db, mg_str& querystring);
+    static std::string add_post(sqlite3* db, mg_str& querystring, std::string secret);
     static bool comparator(const row &l, const row &r);
 };
 object_reference board
@@ -51,8 +51,8 @@ object_reference board
     int threadcount;
 
     std::string make_threadlist_fe(sqlite3* db);
-    std::string make_board_fe(sqlite3* db);
-    static void add_thread(sqlite3* db, mg_str& querystring);
+    std::string make_board_fe(sqlite3* db, std::string captcha, std::string capt_token);
+    static std::string add_thread(sqlite3* db, mg_str& querystring, std::string secret);
 };
 
 void db_schema_init(sqlite3* db);

@@ -1,5 +1,6 @@
 #include "IPchan.h"
 #include "lib/dumbstr/dumbstr.h"
+#include "lib/captcha/botwall.h"
 #include "lib/sqlite/sqlite3.h"
 #include <iostream>
 #include <string>
@@ -98,7 +99,7 @@ std::string board::make_threadlist_fe(sqlite3* db)
     return acc;
 }
 
-std::string board::make_board_fe(sqlite3* db)
+std::string board::make_board_fe(sqlite3* db, std::string captcha, std::string capt_token)
 {
     std::string acc;
     rows threads;
@@ -117,7 +118,9 @@ std::string board::make_board_fe(sqlite3* db)
                 {"replycount", (*iter)["replies"]},
                 {"replies", thread::make_thread_fe(db, (*iter))},
                 {"bid", (*iter)["bid"]},
-                {"tid", (*iter)["tid"]}
+                {"tid", (*iter)["tid"]},
+                {"captcha_token", capt_token},
+                {"challenge", captcha}
             })
         );
     }
@@ -128,12 +131,18 @@ std::string board::make_board_fe(sqlite3* db)
 mg_http_get_var(&querystring, #key, buffer_##key, sizeof(buffer_##key)); \
 const char* key = buffer_##key;
 
-void thread::add_post(sqlite3* db, mg_str& querystring)
+std::string thread::add_post(sqlite3* db, mg_str& querystring, std::string secret)
 {
+    buffetchhttpvar(token);
+    buffetchhttpvar(guess);
+    buffetchhttpvar(bid);
+
+    if (!botwall::check_captcha(bid, guess, token, secret))
+        return "ur shits fucked mayne, try that captcha again";
+
     rows res;
 
     buffetchhttpvar(tid);
-    buffetchhttpvar(bid);
 
     time_t tim = time(0);
 
@@ -169,13 +178,20 @@ void thread::add_post(sqlite3* db, mg_str& querystring)
             }
         )
     }.rexec(&res);
+    return "done (hopefully.......)";
 }
 
-void board::add_thread(sqlite3* db, mg_str& querystring)
+std::string board::add_thread(sqlite3* db, mg_str& querystring, std::string secret)
 {
+    buffetchhttpvar(token);
+    buffetchhttpvar(guess);
+    buffetchhttpvar(bid);
+
+    if (!botwall::check_captcha(bid, guess, token, secret))
+        return "ur shits fucked mayne, try that captcha again";
+    
     rows res;
 
-    buffetchhttpvar(bid);
 
     time_t tim = time(0);
 
@@ -214,4 +230,5 @@ void board::add_thread(sqlite3* db, mg_str& querystring)
             }
         )
     }.rexec(&res);
+    return "done (hopefully.......)";
 }

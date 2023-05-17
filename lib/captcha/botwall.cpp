@@ -1,14 +1,59 @@
+/*
+flow
+-> usr loads /CAPTCHA.zomg
+<- gets back challenge img loaded from b64, plus invisible form field for "token"
+    token is challenge soln+timestamp of generation rounded to 100 secs+captcha_secret+ipid all sha256 hashed
+
+-> usr jets back the proposed soln + the token
+<- if proposed+time of processing rounded to 100 secs+captcha secret+ipid == token, usr is heckin' cute and valid
+    else, FUCK YUO!!!!1111one
+*/
+
 #include "./botwall.h"
+#include <cstdint>
+#include <fstream>
+#include <sstream>
+#include <string>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 #include <cstdlib>
 #include <iostream>
+#include <iomanip>
+#include <openssl/sha.h>
+#include <openssl/evp.h>
 
-std::vector<std::string> opts = {"SQUARE", "CIRCLE", "TRIANGLE", "DIAMOND"};
+std::vector<std::string> opts = {"S", "C", "T", "D"};
 
-std::pair<std::string, std::string> botwall::generate_captcha()
+
+std::string b64enc(std::string in)
+{
+    char res[(4*in.length()+2)/3];
+    EVP_EncodeBlock((unsigned char*)res, (const unsigned char*)in.c_str(), in.length());
+    return std::string(res);
+}
+
+
+std::string sha256(std::string input)
+{
+    std::stringstream res;
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)input.c_str(), input.size(), hash);
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        res << std::hex << std::setfill('0') << std::setw(2) << (int)hash[i];
+
+    return res.str();
+}
+
+void get_file_bytes(void* context, void* data, int size)
+{
+    std::stringstream& f = *((std::stringstream*)context);
+    f.write(((char*)data), size);
+    //std::cout << "called once! " << size << std::endl;
+}
+
+std::pair<std::string, std::string> botwall::generate_captcha(unsigned int ipid, std::string secret)
 {
     int x = 200;
     int y = 40;
@@ -17,10 +62,6 @@ std::pair<std::string, std::string> botwall::generate_captcha()
     std::vector<std::string> challenge;
     for (int i = 0; i < ((int)(x/20))-2; i++)
         challenge.push_back(opts[rand() % 4]);
-    std::string challenge_str;
-    for (auto it = challenge.begin(); it != challenge.end(); it++)
-        challenge_str.append(*it).append(" ");
-    std::cout << challenge_str << std::endl;
 
     std::vector<std::vector<unsigned char>> proto;
     for (int yi = 0; yi < y; yi++)
@@ -30,7 +71,9 @@ std::pair<std::string, std::string> botwall::generate_captcha()
             proto[yi].push_back(0);
     }
 
-    int mod = rand() % 6;
+    std::string challenge_str;
+
+    int mod = rand() % 12;
     mod *= (mod%2) ? 1 : -1;
     for (int xi = 20; xi < x-20; xi += 20)
     {
@@ -40,36 +83,35 @@ std::pair<std::string, std::string> botwall::generate_captcha()
         mod *= (mod%2) ? 1 : -1;
         xi += mod;
         std::string chal = challenge[idx];
-        std::cout << chal << std::endl; 
+        challenge_str.append(chal);
 
         int basey = (y/2);
         basey += mod;
 
-        if (chal == "DIAMOND")
+        int r = 10;
+
+        if (chal == "D")
         {
             for (int deg = 0; deg < 360; deg += 2)
             {
-                int r = 10;
                 int xt = r*std::pow(cos(deg), 3);
                 int yt = r*std::pow(sin(deg), 3);
                 proto[yt + basey][xt + xi] = 255;
             }
         }
-        else if (chal == "CIRCLE")
+        else if (chal == "C")
         {
             for (int deg = 0; deg < 360; deg += 2)
             {
-                int r = 10;
                 int xt = r*cos(deg);
                 int yt = r*sin(deg);
                 proto[yt + basey][xt + xi] = 255;
             }
         }
-        else if (chal == "TRIANGLE")
+        else if (chal == "T")
         {
             for (int deg = 0; deg < 360; deg += 2)
             {
-                int r = 10;
                 int xt = -1 * r*std::pow(cos(deg), 3);
                 int yt = -1 * r*std::pow(sin(deg), 2);
                 proto[yt + basey][xt + xi] = 255;
@@ -77,7 +119,7 @@ std::pair<std::string, std::string> botwall::generate_captcha()
             for (int bar = 0; bar < 10; bar++)
                 proto[basey][xi - 5 + bar] = 255;
         }
-        else if (chal == "SQUARE")
+        else if (chal == "S")
         {
             for (int bar = 0; bar < 10; bar++)
                 proto[basey-5][xi - 5 + bar] = 255;
@@ -94,14 +136,47 @@ std::pair<std::string, std::string> botwall::generate_captcha()
     for (int i = 0; i < 100; i++)
         proto[rand()%y][rand()%x] = 255;
 
+    for (int i = 0; i < 200; i++)
+        proto[rand()%y][rand()%x] = 0;
+
     std::vector<unsigned char> bytes;
     for (int yi = 0; yi < y; yi++)
     {
         for (int xi = 0; xi < x; xi++)
             bytes.push_back(proto[yi][xi]);
     }
+    std::stringstream f {};
+    stbi_write_bmp_to_func(&get_file_bytes, (void*)(&f), x, y, n, bytes.data());
+    std::string aaa = "data:image/bmp;base64,";
+    aaa.append(b64enc(f.str()));
 
-    stbi_write_bmp("static/imgs/aids.bmp", x, y, n, bytes.data());
-    
-    return std::pair<std::string, std::string>(challenge_str, "static/imgs/aids.bmp");
+
+    std::string token = challenge_str;
+    token.append(std::to_string(ipid));
+    time_t tim = time(0);
+    tim = (time_t)(tim/(60*5));
+    token.append(std::to_string(tim));
+    token.append(secret);
+    token = sha256(token);
+
+    /*
+    std::fstream F;
+    F.open("static/imgs/captcha/aids.bmp");
+    F.write(f.str().c_str(), f.str().length());
+    F.close();
+    */
+    return std::pair<std::string, std::string>(token, aaa);
+}
+
+bool botwall::check_captcha(std::string ipid, std::string guess, std::string token, std::string secret)
+{
+    std::string proposed = guess;
+    proposed.append(ipid);
+    time_t tim = time(0);
+    tim = (time_t)(tim/(60*5));
+    proposed.append(std::to_string(tim));
+    proposed.append(secret);
+    proposed = sha256(proposed);
+
+    return proposed == token;
 }

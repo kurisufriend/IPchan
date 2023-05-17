@@ -2,8 +2,10 @@
 #include "lib/sqlite/sqlite3.h"
 #include "lib/dumbstr/dumbstr.h"
 #include "lib/json.hpp"
+#include "lib/captcha/botwall.h"
 #include "IPchan.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <any>
@@ -17,6 +19,8 @@ typedef mg_connection connection;
 typedef mg_http_message message;
 
 sqlite3* db;
+nlohmann::json cfg;
+
 
 void callback(connection* c, int ev, void* ev_data, void* fn_data)
 {
@@ -37,12 +41,17 @@ void callback(connection* c, int ev, void* ev_data, void* fn_data)
             headers.append("Content-Type: text/html;charset=shift_jis\n");
             board b = {.ipid = (int)ipid, .threadcount = 1};
 
+            std::pair<std::string, std::string>  // token, b64'd chllenge
+            captcha= botwall::generate_captcha(ipid, cfg["captcha_secret"]);
+
             std::string body = dumbfmt_file("./static/index.html",
                 {
                     {"ipid", std::to_string(ipid)},
                     {"ipv4", ipv4},
-                    {"threads", b.make_board_fe(db)},
-                    {"threadtitles", b.make_threadlist_fe(db)}
+                    {"threads", b.make_board_fe(db, captcha.second, captcha.first)},
+                    {"threadtitles", b.make_threadlist_fe(db)},
+                    {"challenge", captcha.second},
+                    {"captcha_token", captcha.first}
                 }
             );
             mg_http_reply(c, 200, headers.c_str(),
@@ -50,17 +59,22 @@ void callback(connection* c, int ev, void* ev_data, void* fn_data)
         }
         else if (mg_http_match_uri(msg, "/post"))
         {
-            thread::add_post(db, msg->body);
+            std::string res = thread::add_post(db, msg->body, cfg["captcha_secret"]);
             headers.append("Location: /\n");
             mg_http_reply(c, 303, headers.c_str(), 
-                "done (hopefully.......)");
+                res.c_str());
         }        
         else if (mg_http_match_uri(msg, "/post-thread"))
         {
-            board::add_thread(db, msg->body);
+            std::string res = board::add_thread(db, msg->body, cfg["captcha_secret"]);
             headers.append("Location: /\n");
             mg_http_reply(c, 303, headers.c_str(), 
-                "done (hopefully.......)");
+                res.c_str());
+        }
+        else if (mg_http_match_uri(msg, "/CAPTCHA.bmp"))
+        {
+            mg_http_serve_opts o = {.mime_types="image/bmp"};
+            mg_http_serve_file(c, msg, "./static/imgs/aids.bmp", &o);
         }
         else 
         {
@@ -73,6 +87,7 @@ void callback(connection* c, int ev, void* ev_data, void* fn_data)
 
 int main(int argc, char* argv[])
 {
+    std::srand(time(0));
     mg_mgr mongoose;
     mg_mgr_init(&mongoose);
 
@@ -91,9 +106,8 @@ int main(int argc, char* argv[])
     
     std::fstream f;
     f.open("./config.json");
-    nlohmann::json cfg = nlohmann::json::parse(f);
+    cfg = nlohmann::json::parse(f);
     f.close();
-
 
     mg_http_listen(&mongoose, cfg["host"].get<std::string>().c_str(), callback, &mongoose);
     while (true) {mg_mgr_poll(&mongoose, 1000);}

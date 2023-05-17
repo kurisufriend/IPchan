@@ -3,6 +3,6 @@ Different versions of this board are shown for each unique IP address connecting
 The goal is to create a simple system for the creation and upkeep of communities with some kind of locality constraint. A potential next step would be to expose /four/ boards for each connection -- one unique to that fully qualified IPv4 (i.e. exactly A.B.C.D), then one for each higher subclass (A.B.C.*, A.B.*.*, and A.*.*.*).
 
 critical todo:
-* CAPTCHA
+* ~~CAPTCHA~~
 * post cooldown
 ![example image](https://github.com/kurisufriend/IPchan/blob/master/static/imgs/example.png?raw=true)
