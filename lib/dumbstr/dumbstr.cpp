@@ -37,5 +37,6 @@ std::string dumbfmt_html_escape(std::string o)
     res = std::regex_replace(res, std::regex("\""), "&quot;");
     res = std::regex_replace(res, std::regex("\'"), "&apos;");
     res = std::regex_replace(res, std::regex("\n"), "<br>");
+    res = std::regex_replace(res, std::regex("!"), "<i>!</i>");
     return res;
 }
