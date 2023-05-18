@@ -47,7 +47,7 @@ object_reference thread
 };
 object_reference board
 {
-    int ipid; // == bid
+    unsigned int ipid; // == bid
     int threadcount;
 
     std::string make_threadlist_fe(sqlite3* db);

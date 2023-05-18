@@ -59,7 +59,7 @@ void callback(connection* c, int ev, void* ev_data, void* fn_data)
         if(mg_http_match_uri(msg, "/"))
         {
             headers.append("Content-Type: text/html;charset=shift_jis\n");
-            board b = {.ipid = (int)ipid, .threadcount = 1};
+            board b = {.ipid = (unsigned int)ipid, .threadcount = 1};
 
             std::pair<std::string, std::string>  // token, b64'd chllenge
             captcha= botwall::generate_captcha(ipid, cfg["captcha_secret"]);
