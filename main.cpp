@@ -28,7 +28,27 @@ void callback(connection* c, int ev, void* ev_data, void* fn_data)
     {
         std::string headers = XCLACKSOVERHEAD;
         message* msg = (message*)ev_data;
-        ipv4 ip = *((ipv4*)(&(c->rem.ip)));
+        mg_str* oip = mg_http_get_header(msg, "CF-Connecting-IP");
+        ipv4 cfip;
+        if (oip)
+        {
+            std::string oips = std::string(oip->ptr);
+            oips = oips.substr(0, oips.find("\n"));
+            int it = 0;
+            std::string acc;
+            for (int i = 0; i < oips.length(); i++)
+            {
+                if (oips.at(i) == '.')
+                {
+                    cfip.adr[it] = std::stoi(acc);
+                    it++;
+                    acc = "";
+                    continue;
+                }
+                acc.push_back(oips.at(i));
+            }cfip.adr[it] = std::stoi(acc);
+        }
+        ipv4 ip = oip ? cfip : *((ipv4*)(&(c->rem.ip)));
         unsigned int ipid = ip2ipid(&ip);
         std::string ipv4 = dumbfmt({
             std::to_string(ip.adr[0]),
