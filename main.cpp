@@ -63,7 +63,6 @@ void callback(connection* c, int ev, void* ev_data, void* fn_data)
 
             std::pair<std::string, std::string>  // token, b64'd chllenge
             captcha= botwall::generate_captcha(ipid, cfg["captcha_secret"]);
-
             std::string body = dumbfmt_file("./static/index.html",
                 {
                     {"ipid", std::to_string(ipid)},

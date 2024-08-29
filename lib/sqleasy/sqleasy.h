@@ -2,9 +2,12 @@
 #include "../sqlite/sqlite3.h"
 #include <map>
 #include <vector>
+#include <string>
 
 typedef std::map<std::string, std::string/*std::pair<unsigned char, void*>*/> row;
 typedef std::vector<row> rows;
+
+#define qexec(q) sqleasy_q{db, q}.exec()
 
 struct sqleasy_q//uery
 {
@@ -17,3 +20,5 @@ struct sqleasy_q//uery
     rows exec();
     void rexec(rows* res);
 };
+#define se(s) sqlesc(s)
+std::string sqlesc(std::string s);

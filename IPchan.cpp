@@ -48,7 +48,7 @@ std::string thread::make_thread_fe(sqlite3* db, row& r)
     rows posts;
 
     sqleasy_q{db, 
-        dumbfmt({"select * from posts where bid=",r["bid"]," and tid=",r["tid"],";"})
+        dumbfmt({"select * from posts where bid=",se(r["bid"])," and tid=",se(r["tid"]),";"})
     }.rexec(&posts);
 
     for (auto iter = posts.begin(); iter != posts.end(); iter++)
@@ -84,7 +84,7 @@ std::string board::make_threadlist_fe(sqlite3* db)
     rows threads;
 
     sqleasy_q{db,
-        dumbfmt({"select * from threads where bid=",std::to_string(this->ipid), ";"})
+        dumbfmt({"select * from threads where bid=",se(std::to_string(this->ipid)), ";"})
     }.rexec(&threads);
     std::sort(threads.begin(), threads.end(), thread::comparator);
     for (auto iter = threads.begin(); iter != threads.end(); iter++)
@@ -105,7 +105,7 @@ std::string board::make_board_fe(sqlite3* db, std::string captcha, std::string c
     rows threads;
 
     sqleasy_q{db,
-        dumbfmt({"select * from threads where bid=", std::to_string(this->ipid), ";"})
+        dumbfmt({"select * from threads where bid=", se(std::to_string(this->ipid)), ";"})
     }.rexec(&threads);
     
     std::sort(threads.begin(), threads.end(), thread::comparator);
@@ -148,7 +148,7 @@ std::string thread::add_post(sqlite3* db, mg_str& querystring, std::string secre
 
     rows threads;
     sqleasy_q{db,
-        dumbfmt({"select * from threads where bid=",bid," and tid=",tid,";"})
+        dumbfmt({"select * from threads where bid=",se(bid)," and tid=",se(tid),";"})
     }.rexec(&threads);
     
     
@@ -156,11 +156,11 @@ std::string thread::add_post(sqlite3* db, mg_str& querystring, std::string secre
     int replycount = std::stoi(replies, &stoi_nchars) + 1;
 
     sqleasy_q{db,
-        dumbfmt({"update threads set replies=",std::to_string(replycount)," where bid=",bid," and tid=",tid,";"})
+        dumbfmt({"update threads set replies=",se(std::to_string(replycount))," where bid=",se(bid)," and tid=",se(tid),";"})
     }.rexec(&threads);
 
     sqleasy_q{db,
-        dumbfmt({"update threads set lastpost=",std::to_string(tim)," where bid=",bid," and tid=",tid,";"})
+        dumbfmt({"update threads set lastpost=",se(std::to_string(tim))," where bid=",se(bid)," and tid=",se(tid),";"})
     }.rexec(&threads);
 
     buffetchhttpvar(postname);
@@ -169,12 +169,12 @@ std::string thread::add_post(sqlite3* db, mg_str& querystring, std::string secre
         dumbfmt(
             {
             "insert into posts values(",
-            tid, ",",
-            bid, ",",
-            std::to_string(replycount), ",",
-            std::to_string(tim), ",\"",
-            postname, "\",\"",
-            postbody, "\");"
+            se(tid), ",",
+            se(bid), ",",
+            se(std::to_string(replycount)), ",",
+            se(std::to_string(tim)), ",\"",
+            se(postname), "\",\"",
+            se(postbody), "\");"
             }
         )
     }.rexec(&res);
@@ -197,7 +197,7 @@ std::string board::add_thread(sqlite3* db, mg_str& querystring, std::string secr
 
     rows threads;
     sqleasy_q{db,
-        dumbfmt({"select * from threads where bid=", bid, ";"})
+        dumbfmt({"select * from threads where bid=", se(bid), ";"})
     }.rexec(&threads);
     int tid = threads.size();
 
@@ -208,11 +208,11 @@ std::string board::add_thread(sqlite3* db, mg_str& querystring, std::string secr
         dumbfmt(
             {
             "insert into threads values(",
-            bid, ",",
-            std::to_string(tid), ",\"",
-            postsub, "\",",
+            se(bid), ",",
+            se(std::to_string(tid)), ",\"",
+            se(postsub), "\",",
             "1,",
-            std::to_string(tim), ");"
+            se(std::to_string(tim)), ");"
             }
         )
     }.rexec(&res);
@@ -221,12 +221,12 @@ std::string board::add_thread(sqlite3* db, mg_str& querystring, std::string secr
         dumbfmt(
             {
             "insert into posts values(",
-            std::to_string(tid), ",",
-            bid, ",",
+            se(std::to_string(tid)), ",",
+            se(bid), ",",
             "1", ",",
-            std::to_string(tim), ",\"",
-            postname, "\",\"",
-            postbody, "\");"
+            se(std::to_string(tim)), ",\"",
+            se(postname), "\",\"",
+            se(postbody), "\");"
             }
         )
     }.rexec(&res);
